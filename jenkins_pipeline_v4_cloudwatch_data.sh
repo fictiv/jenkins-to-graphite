@@ -13,5 +13,5 @@ export AWS_CLOUDWATCH_URL=http://monitoring.us-west-2.amazonaws.com/
 
 cmd="./jenkins-to-graphite.py --jenkins-url=https://prod-pipeline.fictiv.com/jenkins/ --jenkins-user=jim@fictiv.com --jenkins-password=ebec5039c7f6dec7a9e0d79d311376fc --job=pipeline-model-v4"
 
-exec $cmd 2>&1 | /usr/bin/logger -t pipeline_model_v4_cloudwatch_data
-#exec $cmd ${@:+"$@"}
+#exec $cmd 2>&1 | /usr/bin/logger -t pipeline_model_v4_cloudwatch_data
+exec $cmd ${@:+"$@"}

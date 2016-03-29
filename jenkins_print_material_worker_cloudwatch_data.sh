@@ -13,5 +13,5 @@ export AWS_CLOUDWATCH_URL=http://monitoring.us-west-2.amazonaws.com/
 
 cmd="./jenkins-to-graphite.py --jenkins-url=https://prod-pipeline.fictiv.com/jenkins/ --jenkins-user=jim@fictiv.com --jenkins-password=ebec5039c7f6dec7a9e0d79d311376fc --job=worker-3dp-print-material"
 
-exec $cmd 2>&1 | /usr/bin/logger -t worker_3dp_print_material_cloudwatch_data
-#exec $cmd ${@:+"$@"}
+#exec $cmd 2>&1 | /usr/bin/logger -t worker_3dp_print_material_cloudwatch_data
+exec $cmd ${@:+"$@"}
