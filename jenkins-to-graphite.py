@@ -35,8 +35,8 @@ except:
         # simplejson is a good replacement on 2.5 installs
         import simplejson as json
     except:
-        print "FATAL ERROR: can't find any json library for python"
-        print "Please install simplejson, json, or upgrade to python 2.6+"
+        print >> sys.stderr, "FATAL ERROR: can't find any json library for python"
+        print >> sys.stderr, "Please install simplejson, json, or upgrade to python 2.6+"
         sys.exit(1)
 
 
@@ -73,7 +73,7 @@ class JenkinsServer(object):
             f.close()
             data = json.loads(response)
         except Exception, e:
-            logging.warn("Unable to get jenkins response for url %s: %s" % (url, e))
+            print >> sys.stderr, "Unable to get jenkins response for url %s: %s" % (url, e)
             return {}
 
         return data
@@ -100,8 +100,8 @@ class Debug(object):
         return msg
 
     def send(self):
-        print "DEBUG OUTPUT:"
-        print self._data_as_msg()
+        print >> sys.stderr, "DEBUG OUTPUT:"
+        print >> sys.stderr, self._data_as_msg()
         return True
 
 
@@ -131,7 +131,7 @@ class GraphiteServer(object):
             s.sendall(self._data_as_msg())
             s.close()
         except Exception, e:
-            logging.warn("Unable to send msg to graphite: %s" % (e,))
+            print >> sys.stderr, "Unable to send msg to graphite: %s" % (e,)
             return False
 
         return True
@@ -163,8 +163,9 @@ class CloudwatchServer(object):
             for (key, val) in self.data.items():
                 cwc.put_metric_data(namespace=self.namespace, name=key, value=val, timestamp=now, unit="Count")
 
+            print >> sys.stderr, "Data successfully sent to cloudwatch for job: %s" % (self.job)
         except Exception, e:
-            logging.warn("Unable to send msg to cloudwatch: %s" % (e,))
+            print >> sys.stderr, "Unable to send msg to cloudwatch: %s" % (e,)
             return False
 
         return True
