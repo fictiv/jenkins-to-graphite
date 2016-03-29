@@ -95,7 +95,7 @@ class Debug(object):
         msg = ""
         now = time.time()
         for (key, val) in self.data.items():
-            msg += "%s %s %s\n" % (key, val, now)
+            msg += "%s %.1f %s\n" % (key, val, now)
         return msg
 
     def send(self):
@@ -151,7 +151,7 @@ class CloudwatchServer(object):
         msg = ""
         now = time.time()
         for (key, val) in self.data.items():
-            msg += "%s %s %s\n" % (key, val, now)
+            msg += "%s %.1f %s\n" % (key, val, now)
         return msg
 
     def send(self):
@@ -159,8 +159,7 @@ class CloudwatchServer(object):
             now = time.time()
             cwc = boto.ec2.cloudwatch.connect_to_region(self.region)
             for (key, val) in self.data.items():
-                value = "%.1f" % (val)
-                cwc.put_metric_data(self.namespace, key, value=value, timestamp=now, unit='Count')
+                cwc.put_metric_data(self.namespace, key, value=val, timestamp=now, unit='Count')
                 # cwc.put_metric_data(self.namespace, key, value=val, timestamp=now, unit=Count, dimensions=None, statistics=None)
         except Exception, e:
             logging.warn("Unable to send msg to cloudwatch: %s" % (e,))
