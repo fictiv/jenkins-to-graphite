@@ -20,7 +20,6 @@
 import base64
 import logging
 import optparse
-import os
 import sys
 import socket
 import time
@@ -38,7 +37,9 @@ except:
         print "FATAL ERROR: can't find any json library for python"
         print "Please install simplejson, json, or upgrade to python 2.6+"
         sys.exit(1)
-#end json import
+
+
+# end json import
 
 
 class JenkinsServer(object):
@@ -55,7 +56,8 @@ class JenkinsServer(object):
         if self._opener is None:
             opener = urllib2.build_opener(urllib2.HTTPCookieProcessor())
             if self.user or self.password:
-                opener.addheaders = [(("Authorization", "Basic " + base64.encodestring("%s:%s" % (self.user, self.password))))]
+                opener.addheaders = [
+                    (("Authorization", "Basic " + base64.encodestring("%s:%s" % (self.user, self.password))))]
             urllib2.install_opener(opener)
             self._opener = opener
 
@@ -78,12 +80,16 @@ class JenkinsServer(object):
     def get_data(self, url):
         return self.get_raw_data("%s/api/json" % url)
 
+
 class Debug(object):
-    def __init__(self):
-        self.data={}
+    def __init__(self, job, namespace):
+        self.job = job.rstrip('.')
+        self.namespace = namespace.rstrip('.')
+
+        self.data = {}
 
     def add_data(self, key, value):
-        self.data["%s.%s" % (self.prefix, key)] = value
+        self.data["%s.%s.%s" % (self.namespace, self.job, key)] = value
 
     def _data_as_msg(self):
         msg = ""
@@ -93,18 +99,22 @@ class Debug(object):
         return msg
 
     def send(self):
+        print "DEBUG OUTPUT:\n"
         print self._data_as_msg()
         return True
 
+
 class GraphiteServer(object):
-    def __init__(self, server, port, prefix):
+    def __init__(self, server, port, job, namespace):
         self.server = server
         self.port = int(port)
-        self.prefix = prefix.rstrip('.')
+        self.job = job.rstrip('.')
+        self.namespace = namespace.rstrip('.')
+
         self.data = {}
 
     def add_data(self, key, value):
-        self.data["%s.%s" % (self.prefix, key)] = value
+        self.data["%s.%s.%s" % (self.namespace, self.job, key)] = value
 
     def _data_as_msg(self):
         msg = ""
@@ -125,13 +135,17 @@ class GraphiteServer(object):
 
         return True
 
+
 class CloudwatchServer(object):
-    def __init__(self):
-        self.namespace = "Jenkins"
-        self.data={}
+    def __init__(self, region, job, namespace):
+        self.job = job.rstrip('.')
+        self.namespace = namespace.rstrip('.')
+        self.region = region
+
+        self.data = {}
 
     def add_data(self, key, value):
-        self.data["%s.%s" % (self.prefix, key)] = value
+        self.data["%s.%s.%s" % (self.namespace, self.job, key)] = value
 
     def _data_as_msg(self):
         msg = ""
@@ -142,13 +156,14 @@ class CloudwatchServer(object):
 
     def send(self):
         try:
-            cwc = boto.ec2.cloudwatch.connect_to_region(boto.cfg.cloudwatch_region_name)
-#            cwc.put_metric_data(self.namespace, name, value=None, timestamp=None, unit=None, dimensions=None, statistics=None)
+            cwc = boto.ec2.cloudwatch.connect_to_region(self.region)
+        #   cwc.put_metric_data(self.namespace, name, value=None, timestamp=None, unit=None, dimensions=None, statistics=None)
         except Exception, e:
             logging.warn("Unable to send msg to cloudwatch: %s" % (e,))
             return False
 
         return True
+
 
 def parse_args():
     parser = optparse.OptionParser()
@@ -163,19 +178,29 @@ def parse_args():
     parser.add_option("", "--jenkins-password",
                       help="Password for authenticating with jenkins")
 
-    parser.add_option("", "--jobs",
-                      help="Jobs view to monitor for success/failure")
-    parser.add_option("", "--prefix", default="jenkins",
-                      help="Graphite metric prefix")
+    parser.add_option("", "--job",
+                      help="Job view to monitor for success/failure")
+    parser.add_option("", "--namespace", default="Jenkins",
+                      help="Used as either the Cloudwatch metric namespace or the Graphite metric namespace")
+    parser.add_option("", "--region", default="us-west-2",
+                      help="Cloudwatch region where these metrics reside")
     parser.add_option("", "--label", action="append", dest="labels",
                       help="Fetch stats applicable to this node label. Can bee applied multiple times for monitoring more labels.")
-    parser.add_option("", "--debug-output",
-                      help="Set to True or False - when set to False output the stats and do not send to Cloudwatch.")
+    parser.add_option("", "--debug",
+                      help="Output the data and do not send to Cloudwatch or Graphite.")
 
     (opts, args) = parser.parse_args()
 
-    if not opts.graphite_server or not opts.jenkins_url:
-        print >> sys.stderr, "Need to specify graphite server and jenkins url"
+    if not opts.debug and not opts.region and not opts.graphite_server:
+        print >> sys.stderr, "Need to specify either the target graphite server or cloudwatch region"
+        sys.exit(1)
+
+    if not opts.jenkins_url:
+        print >> sys.stderr, "Need to specify the jenkins url"
+        sys.exit(1)
+
+    if not opts.job:
+        print >> sys.stderr, "Need to specify the jenkins job"
         sys.exit(1)
 
     return opts
@@ -186,19 +211,21 @@ def main():
     jenkins = JenkinsServer(opts.jenkins_url, opts.jenkins_user,
                             opts.jenkins_password)
 
-    task = Debug()
+    task = Debug(opts.job, opts.namespace)
 
-    if (opts.graphite_server and not opts.debug):
+    if opts.graphite_server and not opts.region and not opts.debug:
         task = GraphiteServer(opts.graphite_server, opts.graphite_port,
-                                  opts.prefix)
+                              opts.job, opts.namespace)
 
-    if (opts.cloudwatch_upload and not opts.debug):
-        task = CloudwatchServer()
+    if opts.region and not opts.graphite_server and not opts.debug:
+        task = CloudwatchServer(opts.region, opts.job, opts.namespace)
 
     executor_info = jenkins.get_data("computer")
     queue_info = jenkins.get_data("queue")
-    build_info_min = jenkins.get_raw_data("view/All/timeline/data?min=%d&max=%d" % ((time.time() - 60) * 1000, time.time() * 1000))
-    build_info_hour = jenkins.get_raw_data("view/All/timeline/data?min=%d&max=%d" % ((time.time() - 3600) * 1000, time.time() * 1000))
+    build_info_min = jenkins.get_raw_data(
+        "view/All/timeline/data?min=%d&max=%d" % ((time.time() - 60) * 1000, time.time() * 1000))
+    build_info_hour = jenkins.get_raw_data(
+        "view/All/timeline/data?min=%d&max=%d" % ((time.time() - 3600) * 1000, time.time() * 1000))
 
     task.add_data("queue.size", len(queue_info.get("items", [])))
 
@@ -208,8 +235,8 @@ def main():
     task.add_data("executors.total", executor_info.get("totalExecutors", 0))
     task.add_data("executors.busy", executor_info.get("busyExecutors", 0))
     task.add_data("executors.free",
-                      executor_info.get("totalExecutors", 0) -
-                      executor_info.get("busyExecutors", 0))
+                  executor_info.get("totalExecutors", 0) -
+                  executor_info.get("busyExecutors", 0))
 
     nodes_total = executor_info.get("computer", [])
     nodes_offline = [j for j in nodes_total if j.get("offline")]
@@ -225,11 +252,11 @@ def main():
             task.add_data("labels.%s.executors.total" % label, label_info.get("totalExecutors", 0))
             task.add_data("labels.%s.executors.busy" % label, label_info.get("busyExecutors", 0))
             task.add_data("labels.%s.executors.free" % label,
-                              label_info.get("totalExecutors", 0) -
-                              label_info.get("busyExecutors", 0))
+                          label_info.get("totalExecutors", 0) -
+                          label_info.get("busyExecutors", 0))
 
-    if opts.jobs:
-        builds_info = jenkins.get_data("/jobs/%s" % opts.jobs)
+    if opts.job:
+        builds_info = jenkins.get_data("job/%s" % opts.job)
         jobs = builds_info.get("jobs", [])
         ok = [j for j in jobs if j.get("color", 0) == "blue"]
         fail = [j for j in jobs if j.get("color", 0) == "red"]
@@ -240,6 +267,7 @@ def main():
         task.add_data("jobs.warn", len(warn))
 
     task.send()
+
 
 if __name__ == "__main__":
     main()
