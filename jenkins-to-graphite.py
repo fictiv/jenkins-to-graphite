@@ -25,6 +25,7 @@ import socket
 import time
 import urllib2
 import boto.ec2.cloudwatch
+from datetime import date
 
 try:
     # this should be available in any python 2.6 or newer
@@ -93,7 +94,7 @@ class Debug(object):
 
     def _data_as_msg(self):
         msg = ""
-        now = time.time()
+        now = date.fromtimestamp(time.time())
         for (key, val) in self.data.items():
             msg += "%s %.1f %s\n" % (key, val, now)
         return msg
@@ -118,7 +119,7 @@ class GraphiteServer(object):
 
     def _data_as_msg(self):
         msg = ""
-        now = time.time()
+        now = date.fromtimestamp(time.time())
         for (key, val) in self.data.items():
             msg += "%s %s %s\n" % (key, val, now)
         return msg
@@ -149,14 +150,14 @@ class CloudwatchServer(object):
 
     def _data_as_msg(self):
         msg = ""
-        now = time.time()
+        now = date.fromtimestamp(time.time())
         for (key, val) in self.data.items():
             msg += "%s %.1f %s\n" % (key, val, now)
         return msg
 
     def send(self):
         try:
-            now = time.time()
+            now = date.fromtimestamp(time.time())
             cwc = boto.ec2.cloudwatch.connect_to_region(self.region)
 
             for (key, val) in self.data.items():
