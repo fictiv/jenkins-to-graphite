@@ -216,14 +216,18 @@ def main():
     jenkins = JenkinsServer(opts.jenkins_url, opts.jenkins_user,
                             opts.jenkins_password)
 
-    task = Debug(opts.job, opts.namespace)
+    if not opts.debug:
 
-    if opts.graphite_server and not opts.region and not opts.debug:
-        task = GraphiteServer(opts.graphite_server, opts.graphite_port,
-                              opts.job, opts.namespace)
+        if opts.region:
+            task = CloudwatchServer(opts.region, opts.job, opts.namespace)
+        elif opts.graphite_server:
+            task = GraphiteServer(opts.graphite_server, opts.graphite_port,
+                                  opts.job, opts.namespace)
+        else:
+            task = Debug(opts.job, opts.namespace)
 
-    if opts.region and not opts.graphite_server and not opts.debug:
-        task = CloudwatchServer(opts.region, opts.job, opts.namespace)
+    else:
+        task = Debug(opts.job, opts.namespace)
 
     executor_info = jenkins.get_data("computer")
     queue_info = jenkins.get_data("queue")
