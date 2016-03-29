@@ -99,7 +99,7 @@ class Debug(object):
         return msg
 
     def send(self):
-        print "DEBUG OUTPUT:\n"
+        print "DEBUG OUTPUT:"
         print self._data_as_msg()
         return True
 
@@ -157,7 +157,9 @@ class CloudwatchServer(object):
     def send(self):
         try:
             cwc = boto.ec2.cloudwatch.connect_to_region(self.region)
-        #   cwc.put_metric_data(self.namespace, name, value=None, timestamp=None, unit=None, dimensions=None, statistics=None)
+            for (key, val) in self.data.items():
+                cwc.put_metric_data(self.namespace, key, value=val, timestamp=now, unit='Count')
+                # cwc.put_metric_data(self.namespace, key, value=val, timestamp=now, unit=Count, dimensions=None, statistics=None)
         except Exception, e:
             logging.warn("Unable to send msg to cloudwatch: %s" % (e,))
             return False
